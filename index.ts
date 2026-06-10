@@ -832,6 +832,8 @@ export default function (pi: ExtensionAPI) {
 		agents = agents.filter((a) => SUBAGENT_ALLOWLIST.includes(a.name));
 	}
 
+	logToFile("Extension loaded", { agents: agents.map((a) => a.name), AGENTS_DIR, CONFIG_PATH });
+
 	pi.registerTool({
 		name: "subagent",
 		label: "Subagent",
