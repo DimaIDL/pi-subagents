@@ -978,4 +978,98 @@ export default function (pi: ExtensionAPI) {
 			return c;
 		},
 	});
+
+	// ── agents_info tool — list all registered agents with their metadata ──
+
+	interface AgentInfoResult {
+		agents: Array<{
+			name: string;
+			description: string;
+			model?: string;
+			thinking: string;
+			tools: string[];
+			filePath: string;
+		}>;
+	}
+
+	// Register agents_info tool (second registration)
+	pi.registerTool({
+		name: "agents_info",
+		label: "Agents Info",
+		description:
+			"List all registered agents with their metadata (model, tools, thinking level).",
+		parameters: Type.Object({
+			agent: Type.Optional(Type.String({ description: "Optional agent name to filter by" })),
+		}),
+
+		async execute(toolCallId, params, signal, onUpdate, ctx) {
+			const filtered = agents.filter((a) => !params.agent || a.name === params.agent);
+			return {
+				content: [{ type: "text", text: JSON.stringify(filtered.map((a) => ({
+					name: a.name,
+					description: a.description,
+					model: a.model,
+					thinking: a.thinking,
+					tools: a.tools,
+					filePath: a.filePath,
+				})), null, 2) }],
+				details: { agents: filtered },
+			};
+		},
+
+		renderCall(args, theme, context) {
+			if (!context.expanded) {
+				const filter = args.agent ? ` [${args.agent}]` : "";
+				return new Text(
+					`${theme.fg("toolTitle", theme.bold("agents_info"))}${filter}`,
+					0, 0,
+				);
+			}
+
+			const c = context.lastComponent instanceof Container
+				? (context.lastComponent.clear(), context.lastComponent)
+				: new Container();
+			c.addChild(new Text(`${theme.fg("toolTitle", theme.bold("agents_info"))}`, 0, 0));
+			if (args.agent) {
+				c.addChild(new Spacer(1));
+				c.addChild(new Text(theme.fg("text", `Filter: ${args.agent}`), 0, 0));
+			}
+			return c;
+		},
+
+		renderResult(result, options, theme, context) {
+			const details = result.details as { agents?: AgentConfig[] } | undefined;
+			if (!details?.agents?.length) {
+				return new Text("No agents found", 0, 0);
+			}
+
+			const w = getTermWidth() - 4;
+			const expanded = options.expanded;
+			const c = new Container();
+
+			for (const agent of details.agents) {
+				c.addChild(new Text(
+					`${theme.fg("toolTitle", theme.bold(agent.name))}`,
+					0, 0,
+				));
+				if (agent.description) {
+					c.addChild(new Text(
+						`${theme.fg("dim", agent.description.slice(0, 80))}`,
+						0, 0,
+					));
+				}
+				const meta = [
+					agent.model ? `model: ${agent.model}` : "",
+					`thinking: ${agent.thinking}`,
+					`tools: [${agent.tools.join(", ")}]`,
+				].filter(Boolean).join(" | ");
+				c.addChild(new Text(theme.fg("dim", meta), 0, 0));
+				if (expanded) {
+					c.addChild(new Spacer(1));
+				}
+			}
+
+			return c;
+		},
+	});
 }
