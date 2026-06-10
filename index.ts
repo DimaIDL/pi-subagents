@@ -96,7 +96,31 @@ const EXT_DIR = path.dirname(new URL(import.meta.url).pathname);
 const AGENTS_DIR = path.join(EXT_DIR, "agents");
 const TOOLS_DIR = path.join(EXT_DIR, "tools");
 const CONFIG_PATH = path.join(EXT_DIR, "config.json");
+const LOGS_DIR = path.join(EXT_DIR, "_logs");
 const DEFAULT_MAX_CONCURRENCY = 4;
+
+/** Append a structured log entry to the per-day file. Creates the file if it doesn't exist.
+ * Each entry is one JSON line: { message, timestamp, metadata? } */
+function logToFile(message: string, metadata?: Record<string, unknown>): void {
+	try {
+		if (!fs.existsSync(LOGS_DIR)) {
+			fs.mkdirSync(LOGS_DIR, { recursive: true });
+		}
+		const now = new Date();
+		const filename = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}.txt`;
+		const filepath = path.join(LOGS_DIR, filename);
+		const entry: { message: string; timestamp: string; metadata?: Record<string, unknown> } = {
+			message,
+			timestamp: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`,
+		};
+		if (metadata) {
+			entry.metadata = metadata;
+		}
+		fs.appendFileSync(filepath, JSON.stringify(entry, null, 2) + "\n", { encoding: "utf-8" });
+	} catch {
+		// Silently ignore — logging is best-effort
+	}
+}
 
 function loadConfig(): ExtensionConfig {
 	try {
