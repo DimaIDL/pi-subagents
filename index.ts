@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getMarkdownTheme, parseFrontmatter, truncateHead, withFileMutationQueue, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text, visibleWidth } from "@earendil-works/pi-tui";
@@ -92,7 +93,7 @@ interface ExtensionConfig {
 	maxConcurrency?: number;
 }
 
-const EXT_DIR = path.dirname(new URL(import.meta.url).pathname);
+const EXT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const AGENTS_DIR = path.join(EXT_DIR, "agents");
 const TOOLS_DIR = path.join(EXT_DIR, "tools");
 const CONFIG_PATH = path.join(EXT_DIR, "config.json");
@@ -117,8 +118,8 @@ function logToFile(message: string, metadata?: Record<string, unknown>): void {
 			entry.metadata = metadata;
 		}
 		fs.appendFileSync(filepath, JSON.stringify(entry, null, 2) + "\n", { encoding: "utf-8" });
-	} catch {
-		// Silently ignore — logging is best-effort
+	} catch (e) {
+		console.error(`logToFile failed: ${e instanceof Error ? e.message : e}`);
 	}
 }
 
@@ -832,6 +833,7 @@ export default function (pi: ExtensionAPI) {
 		agents = agents.filter((a) => SUBAGENT_ALLOWLIST.includes(a.name));
 	}
 
+	console.log(`subagents extension loaded — EXT_DIR: ${EXT_DIR} | agents: ${agents.map((a) => a.name).join(", ")} | LOGS_DIR: ${LOGS_DIR}`);
 	logToFile("Extension loaded", { agents: agents.map((a) => a.name), AGENTS_DIR, CONFIG_PATH });
 
 	pi.registerTool({

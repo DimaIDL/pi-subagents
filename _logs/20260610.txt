@@ -1,0 +1,13 @@
+{
+  "message": "Extension loaded",
+  "timestamp": "2026-06-10 16:47:46",
+  "metadata": {
+    "agents": [
+      "researcher",
+      "scout",
+      "worker"
+    ],
+    "AGENTS_DIR": "F:\\prj\\pi-experiments\\simple-subagents\\.pi\\extensions\\simple-subagents\\agents",
+    "CONFIG_PATH": "F:\\prj\\pi-experiments\\simple-subagents\\.pi\\extensions\\simple-subagents\\config.json"
+  }
+}
