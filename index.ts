@@ -111,6 +111,12 @@ const CONFIG_PATH = path.join(EXT_DIR, "config.json");
 const LOGS_DIR = path.join(EXT_DIR, "_logs");
 const DEFAULT_MAX_CONCURRENCY = 4;
 
+/** Expand `~` to the user's home directory (cross-platform). */
+function resolveHomeDir(filePath: string): string {
+	if (!filePath.startsWith("~/")) return filePath;
+	return path.join(os.homedir(), filePath.slice(2));
+}
+
 // ── Custom Tools Loader ────────────────────────────────────────────────
 
 /** Static tools always available (built into this extension). */
@@ -123,7 +129,7 @@ const STATIC_TOOL_TO_EXTENSION: Record<string, string> = {
 function loadToolExtensions(config: ExtensionConfig): Record<string, string> {
 	const list = config.toolExtensions ?? [];
 	return list.filter((t) => t.enabled !== false).reduce(
-		(acc, t) => { acc[t.toolName] = t.extensionPath; return acc; },
+		(acc, t) => { acc[t.toolName] = resolveHomeDir(t.extensionPath); return acc; },
 		{} as Record<string, string>,
 	);
 }
