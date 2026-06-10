@@ -225,7 +225,7 @@ function loadAgents(): AgentConfig[] {
 				name: frontmatter.name,
 				description: frontmatter.description || "",
 				tools,
-				model: frontmatter.model || "anthropic/claude-sonnet-4-6",
+				model: frontmatter.model,
 				thinking: frontmatter.thinking || "medium",
 				systemPrompt: body,
 				filePath,
@@ -853,6 +853,7 @@ export default function (pi: ExtensionAPI) {
 			agent: Type.String({ description: "Name of the agent to invoke" }),
 			task: Type.String({ description: "Task description" }),
 			cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+			model: Type.Optional(Type.String({ description: "Optional model override in provider/model-id format (e.g. 'openai/gpt-4o')" })),
 		}),
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
@@ -862,10 +863,23 @@ export default function (pi: ExtensionAPI) {
 				throw new Error("`subagent` requires both `agent` and `task`. To fan out work, emit multiple `subagent` tool calls in the same turn — they run in parallel.");
 			}
 
-			const agent = agents.find((a) => a.name === params.agent);
-			if (!agent) {
+			const agentRef = agents.find((a) => a.name === params.agent);
+			if (!agentRef) {
 				const available = agents.map((a) => a.name).join(", ") || "none";
 				throw new Error(`Unknown agent: ${params.agent}. Available agents: ${available}`);
+			}
+
+			// Clone the agent config — we modify model locally without touching the registry.
+			const agent = { ...agentRef };
+
+			// Priority chain for model selection:
+			// 1. Explicitly passed by LLM via tool param (params.model)
+			// 2. Declared in agent config from YAML frontmatter (agent.model)
+			// 3. Current parent process model (ctx.model)
+			if (!agent.model && params.model) {
+				agent.model = params.model;
+			} else if (!agent.model && ctx.model) {
+				agent.model = `${ctx.model.provider}/${ctx.model.id}`;
 			}
 
 			const [provider, modelId] = (agent.model || "").split("/");
