@@ -90,7 +90,10 @@ interface Details {
 // ── Config ─────────────────────────────────────────────────────────────
 
 interface ExtensionConfig {
+	/** Maximum concurrent subagent processes. Defaults to 4. */
 	maxConcurrency?: number;
+	/** Enable debug logging to file. Defaults to true if omitted. */
+	debugLog?: boolean;
 }
 
 const EXT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -101,8 +104,11 @@ const LOGS_DIR = path.join(EXT_DIR, "_logs");
 const DEFAULT_MAX_CONCURRENCY = 4;
 
 /** Append a structured log entry to the per-day file. Creates the file if it doesn't exist.
- * Each entry is one JSON line: { message, timestamp, metadata? } */
-function logToFile(message: string, metadata?: Record<string, unknown>): void {
+ * Each entry is one JSON line: { message, timestamp, metadata? }
+ * Skips writing when debugLog is false (defaults to true). */
+function logToFile(message: string, metadata?: Record<string, unknown>, debugLog?: boolean): void {
+	const enabled = debugLog !== undefined ? debugLog : true;
+	if (!enabled) return;
 	try {
 		if (!fs.existsSync(LOGS_DIR)) {
 			fs.mkdirSync(LOGS_DIR, { recursive: true });
@@ -186,28 +192,34 @@ function loadAgents(): AgentConfig[] {
 	if (!fs.existsSync(AGENTS_DIR)) return agents;
 	for (const entry of fs.readdirSync(AGENTS_DIR)) {
 		if (!entry.endsWith(".md")) continue;
-		const filePath = path.join(AGENTS_DIR, entry);
-		const content = fs.readFileSync(filePath, "utf-8");
-		const { frontmatter, body } = parseFrontmatter<Record<string, string>>(content);
-		if (!frontmatter.name) continue;
-		const tools = (frontmatter.tools || "")
-			.split(",")
-			.map((t) => t.trim())
-			.filter(Boolean);
-		const rawSubagentAgents = (frontmatter as Record<string, string>).subagent_agents;
-		const subagentAgents = rawSubagentAgents
-			? rawSubagentAgents.split(",").map((t) => t.trim()).filter(Boolean)
-			: undefined;
-		agents.push({
-			name: frontmatter.name,
-			description: frontmatter.description || "",
-			tools,
-			model: frontmatter.model || "anthropic/claude-sonnet-4-6",
-			thinking: frontmatter.thinking || "medium",
-			systemPrompt: body,
-			filePath,
-			subagentAgents,
-		});
+		try {
+			const filePath = path.join(AGENTS_DIR, entry);
+			const content = fs.readFileSync(filePath, "utf-8");
+			const { frontmatter, body } = parseFrontmatter<Record<string, string>>(content);
+			if (!frontmatter.name) continue;
+			const tools = (frontmatter.tools || "")
+				.split(",")
+				.map((t) => t.trim())
+				.filter(Boolean);
+			const rawSubagentAgents = (frontmatter as Record<string, string>).subagent_agents;
+			const subagentAgents = rawSubagentAgents
+				? rawSubagentAgents.split(",").map((t) => t.trim()).filter(Boolean)
+				: undefined;
+			agents.push({
+				name: frontmatter.name,
+				description: frontmatter.description || "",
+				tools,
+				model: frontmatter.model || "anthropic/claude-sonnet-4-6",
+				thinking: frontmatter.thinking || "medium",
+				systemPrompt: body,
+				filePath,
+				subagentAgents,
+			});
+			logToFile(`Agent loaded: ${frontmatter.name}`, { agent: frontmatter.name, tools, model: frontmatter.model });
+		} catch (e) {
+			const errMsg = e instanceof Error ? e.message : String(e);
+			logToFile(`Failed to load agent file`, { error: errMsg, entry });
+		}
 	}
 	return agents;
 }
@@ -833,8 +845,8 @@ export default function (pi: ExtensionAPI) {
 		agents = agents.filter((a) => SUBAGENT_ALLOWLIST.includes(a.name));
 	}
 
-	console.log(`subagents extension loaded — EXT_DIR: ${EXT_DIR} | agents: ${agents.map((a) => a.name).join(", ")} | LOGS_DIR: ${LOGS_DIR}`);
-	logToFile("Extension loaded", { agents: agents.map((a) => a.name), AGENTS_DIR, CONFIG_PATH });
+	// console.log(`subagents extension loaded — EXT_DIR: ${EXT_DIR} | agents: ${agents.map((a) => a.name).join(", ")} | LOGS_DIR: ${LOGS_DIR}`);
+	logToFile("Extension loaded", { config, agents: agents.map((a) => a.name), AGENTS_DIR, CONFIG_PATH }, config.debugLog);
 
 	pi.registerTool({
 		name: "subagent",
