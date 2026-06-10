@@ -89,11 +89,19 @@ interface Details {
 
 // ── Config ─────────────────────────────────────────────────────────────
 
+interface ToolExtensionDef {
+	toolName: string;
+	extensionPath: string;
+	enabled?: boolean; // defaults to true
+}
+
 interface ExtensionConfig {
 	/** Maximum concurrent subagent processes. Defaults to 4. */
 	maxConcurrency?: number;
 	/** Enable debug logging to file. Defaults to true if omitted. */
 	debugLog?: boolean;
+	/** Mapping of tool names to their implementation files. Merged with static ones. */
+	toolExtensions?: ToolExtensionDef[];
 }
 
 const EXT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -102,6 +110,30 @@ const TOOLS_DIR = path.join(EXT_DIR, "tools");
 const CONFIG_PATH = path.join(EXT_DIR, "config.json");
 const LOGS_DIR = path.join(EXT_DIR, "_logs");
 const DEFAULT_MAX_CONCURRENCY = 4;
+
+// ── Custom Tools Loader ────────────────────────────────────────────────
+
+/** Static tools always available (built into this extension). */
+const STATIC_TOOL_TO_EXTENSION: Record<string, string> = {
+	safe_bash: path.join(TOOLS_DIR, "safe-bash.ts"),
+	subagent: path.join(EXT_DIR, "index.ts"),
+};
+
+/** Load tool→extension mappings from config and merge with static ones. */
+function loadToolExtensions(config: ExtensionConfig): Record<string, string> {
+	const list = config.toolExtensions ?? [];
+	return list.filter((t) => t.enabled !== false).reduce(
+		(acc, t) => { acc[t.toolName] = t.extensionPath; return acc; },
+		{} as Record<string, string>,
+	);
+}
+
+/** Final merged map: static + dynamic tool→extension mappings. */
+let TOOL_TO_EXTENSION: Record<string, string>;
+
+function buildToolToExtensionMap(config: ExtensionConfig): void {
+	TOOL_TO_EXTENSION = { ...STATIC_TOOL_TO_EXTENSION, ...loadToolExtensions(config) };
+}
 
 /** Append a structured log entry to the per-day file. Creates the file if it doesn't exist.
  * Each entry is one JSON line: { message, timestamp, metadata? }
@@ -140,22 +172,6 @@ function loadConfig(): ExtensionConfig {
 
 // Built-in tools that pi provides natively (no extension needed)
 const BUILTIN_TOOLS = new Set(["read", "write", "edit", "bash", "grep", "find", "ls"]);
-
-// Custom tools that require loading an extension into the subagent process
-const EXT_BASE = path.join(process.env.HOME || "~", ".pi", "agent", "extensions");
-const CUSTOM_TOOL_EXTENSIONS: Record<string, string> = {
-	web_search: path.join(EXT_BASE, "web-search", "index.ts"),
-	web_fetch: path.join(EXT_BASE, "web-fetch", "index.ts"),
-	safe_bash: path.join(TOOLS_DIR, "safe-bash.ts"),
-	video_extract: path.join(EXT_BASE, "video-extract", "index.ts"),
-	youtube_search: path.join(EXT_BASE, "youtube-search", "index.ts"),
-	google_image_search: path.join(EXT_BASE, "google-image-search", "index.ts"),
-	// `subagent` is the tool this very extension registers. Listing it here lets
-	// a parent agent grant it to a child agent — the child pi process loads this
-	// same index.ts via `--extension`, sees its own subagent tool, and (if
-	// PI_SUBAGENT_ALLOWED is set) only registers the allowlisted agents.
-	subagent: path.join(EXT_DIR, "index.ts"),
-};
 
 // ── Agent Discovery & Registration ────────────────────────────────────
 
@@ -344,9 +360,9 @@ async function buildPiArgs(
 	for (const tool of agent.tools) {
 		if (BUILTIN_TOOLS.has(tool)) {
 			allowlist.push(tool);
-		} else if (CUSTOM_TOOL_EXTENSIONS[tool]) {
+		} else if (TOOL_TO_EXTENSION[tool]) {
 			allowlist.push(tool);
-			extensionPaths.add(CUSTOM_TOOL_EXTENSIONS[tool]);
+			extensionPaths.add(TOOL_TO_EXTENSION[tool]);
 		}
 	}
 
@@ -834,6 +850,7 @@ function renderAgentProgress(
 
 export default function (pi: ExtensionAPI) {
 	const config = loadConfig();
+	buildToolToExtensionMap(config);
 	const semaphore = new Semaphore(config.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY);
 	agents = loadAgents();
 
