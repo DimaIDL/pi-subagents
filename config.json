@@ -1,1 +1,12 @@
-{}
+{
+  "toolExtensions": [
+    {
+      "toolName": "searxng_search",
+      "extensionPath": "~/.pi/agent/extensions/searxng-tools/index.ts"
+    },
+    {
+      "toolName": "web_fetch",
+      "extensionPath": "~/.pi/agent/extensions/searxng-tools/index.ts"
+    }
+  ]
+}

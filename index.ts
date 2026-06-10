@@ -275,34 +275,6 @@ function formatContextUsage(tokens: number, contextWindow: number | undefined): 
 	return `${pct.toFixed(1)}%/${maxStr}`;
 }
 
-function formatToolPreview(name: string, args: Record<string, unknown>): string {
-	switch (name) {
-		case "bash":
-		case "safe_bash":
-			return `$ ${((args.command as string) || "").slice(0, 80)}`;
-		case "read":
-			return `read ${(args.path as string) || ""}`;
-		case "write":
-			return `write ${(args.path as string) || ""}`;
-		case "edit":
-			return `edit ${(args.path as string) || ""}`;
-		case "grep":
-			return `grep ${(args.pattern as string) || ""}`;
-		case "find":
-			return `find ${(args.pattern as string) || ""}`;
-		case "ls":
-			return `ls ${(args.path as string) || "."}`;
-		case "web_search":
-			return `search "${(args.query as string) || ""}"`;
-		case "web_fetch":
-			return `fetch ${(args.url as string) || ""}`;
-		default: {
-			const s = JSON.stringify(args);
-			return `${name} ${s.slice(0, 60)}`;
-		}
-	}
-}
-
 function truncLine(text: string, maxWidth: number): string {
 	// Collapse embedded newlines first so we render exactly one visible line.
 	// We can't strip them inside `text` directly (would also touch ANSI escapes

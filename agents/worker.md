@@ -1,7 +1,7 @@
 ---
 name: worker
 description: General-purpose worker — reads, writes, and edits code
-tools: read, write, edit, safe_bash, web_search, web_fetch, subagent
+tools: read, write, edit, safe_bash, searxng_search, web_fetch, subagent
 subagent_agents: scout, researcher
 model: anthropic/claude-sonnet-4-6
 thinking: medium
