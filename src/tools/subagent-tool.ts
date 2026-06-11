@@ -1,7 +1,7 @@
 /**
  * Subagent tool definition — execute + renderCall + renderResult.
  */
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { AgentToolResult, ExtensionContext, Theme, ToolDefinition, ToolRenderResultOptions } from "@earendil-works/pi-coding-agent";
 import { Container, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { AgentResult, Details } from "../types.js";
@@ -9,10 +9,23 @@ import { getAgents } from "../agents.js";
 import { runSubagent, Semaphore } from "../execution.js";
 import { renderAgentProgress, getTermWidth } from "../rendering.js";
 
-export default function (pi: ExtensionAPI, maxConcurrency?: number): void {
+// ── Schema (must be defined before use) ───────────────────────────────────
+
+const parametersSchema = Type.Object({
+	agent: Type.String({ description: "Name of the agent to invoke" }),
+	task: Type.String({ description: "Task description" }),
+	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+	model: Type.Optional(Type.String({ description: "Optional model override in provider/model-id format (e.g. 'openai/gpt-4o')" })),
+});
+
+
+
+// ── Tool Definition ──────────────────────────────────────────────────────
+
+export function createSubagentTool(maxConcurrency?: number): ToolDefinition<typeof parametersSchema, { results: AgentResult[] }, void> {
 	const semaphore = new Semaphore(maxConcurrency ?? 4);
 
-	pi.registerTool({
+	return {
 		name: "subagent",
 		label: "Subagent",
 		description: "Run a subagent to complete a task.",
@@ -23,12 +36,7 @@ export default function (pi: ExtensionAPI, maxConcurrency?: number): void {
 			"For multiple independent subagent tasks, emit multiple `subagent` tool calls in the same turn — they run in parallel automatically.",
 			"Subagents have NO context from the current conversation — include ALL necessary context in the task description",
 		],
-		parameters: Type.Object({
-			agent: Type.String({ description: "Name of the agent to invoke" }),
-			task: Type.String({ description: "Task description" }),
-			cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
-			model: Type.Optional(Type.String({ description: "Optional model override in provider/model-id format (e.g. 'openai/gpt-4o')" })),
-		}),
+		parameters: parametersSchema,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			const cwd = ctx.cwd;
@@ -84,7 +92,7 @@ export default function (pi: ExtensionAPI, maxConcurrency?: number): void {
 					liveResult.progress = progress;
 					onUpdate?.({
 						content: [{ type: "text", text: "(running...)" }],
-						details: { results: [liveResult as any] },
+						details: { results: [liveResult] },
 					});
 				}),
 			);
@@ -98,7 +106,7 @@ export default function (pi: ExtensionAPI, maxConcurrency?: number): void {
 			};
 		},
 
-		renderCall(args, theme, context) {
+		renderCall(args: any, theme: Theme, context: any) {
 			if (!context.expanded) {
 				if (!args.agent) {
 					return new Text(theme.fg("toolTitle", theme.bold("subagent")), 0, 0);
@@ -125,7 +133,7 @@ export default function (pi: ExtensionAPI, maxConcurrency?: number): void {
 			return c;
 		},
 
-		renderResult(result: any, options: any, theme: any, context: any) {
+		renderResult(result: AgentToolResult<{ results: AgentResult[] }>, options: ToolRenderResultOptions, theme: Theme, context: any) {
 			const details = result.details as Details | undefined;
 			if (!details?.results?.length) {
 				const t = result.content[0];
@@ -139,5 +147,5 @@ export default function (pi: ExtensionAPI, maxConcurrency?: number): void {
 			c.addChild(renderAgentProgress(details.results[0], theme, expanded, w));
 			return c;
 		},
-	});
+	};
 }
